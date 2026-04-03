@@ -90,7 +90,7 @@ async function processJSONFile(
 		// Generate TypeScript content
 		const tsContent = `import { fromJSON } from "prototypey";
 
-export const ${exportName} = fromJSON(${JSON.stringify(lexiconJSON, null, "\t")});
+export const ${exportName} = fromJSON(${JSON.stringify(lexiconJSON, null, "\t")} as const);
 `;
 
 		// Determine output path - use same structure but in outdir
