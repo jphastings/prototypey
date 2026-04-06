@@ -79,12 +79,10 @@ test("fromJSON and lx.lexicon produce equivalent results", () => {
 						text: {
 							type: "string",
 							maxLength: 300,
-							required: true,
 						},
 						createdAt: {
 							type: "string",
 							format: "datetime",
-							required: true,
 						},
 					},
 					required: ["text", "createdAt"],
