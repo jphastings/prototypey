@@ -107,10 +107,30 @@ type InferUnion<T> = T extends { refs: readonly (infer R)[] }
 		: never
 	: never;
 
+type InferRefLexicon<R, DefName extends string> = R extends {
+	id: infer Id extends string;
+	defs: infer Defs extends Record<string, unknown>;
+}
+	? DefName extends keyof Defs
+		? Prettify<
+				{
+					$type: DefName extends "main" ? Id : `${Id}#${DefName}`;
+				} & ReplaceRefsInType<
+					InferType<Defs[DefName]>,
+					{ [K in keyof Defs]: InferType<Defs[K]> }
+				>
+			>
+		: unknown
+	: unknown;
+
+type GetRefDef<T> = T extends { def: infer D extends string } ? D : "main";
+
 type InferRef<T> = T extends { ref: infer R }
 	? R extends string
 		? { $type: R; [key: string]: unknown }
-		: unknown
+		: R extends { json: infer J }
+			? InferRefLexicon<J, GetRefDef<T>>
+			: InferRefLexicon<R, GetRefDef<T>>
 	: unknown;
 
 type InferParams<T> = InferObject<T>;

@@ -119,6 +119,95 @@ bench("infer with app.bsky.feed.defs lexicon", () => {
 	return schema["~infer"];
 }).types([2592, "instantiations"]);
 
+bench("infer with ref to raw JSON lexicon", () => {
+	const strongRef = {
+		lexicon: 1,
+		id: "com.atproto.repo.strongRef",
+		defs: {
+			main: {
+				type: "object",
+				required: ["uri", "cid"],
+				properties: {
+					uri: { type: "string", format: "at-uri" },
+					cid: { type: "string", format: "cid" },
+				},
+			},
+		},
+	} as const;
+
+	const schema = lx.lexicon("app.bsky.feed.like", {
+		main: lx.record({
+			key: "tid",
+			record: lx.object({
+				subject: lx.ref(strongRef, { required: true }),
+				createdAt: lx.string({ required: true, format: "datetime" }),
+			}),
+		}),
+	});
+	return schema["~infer"];
+}).types([1131, "instantiations"]);
+
+bench("infer with ref to fromJSON lexicon", () => {
+	const strongRef = fromJSON({
+		lexicon: 1,
+		id: "com.atproto.repo.strongRef",
+		defs: {
+			main: {
+				type: "object",
+				required: ["uri", "cid"],
+				properties: {
+					uri: { type: "string", format: "at-uri" },
+					cid: { type: "string", format: "cid" },
+				},
+			},
+		},
+	});
+
+	const schema = lx.lexicon("app.bsky.feed.like", {
+		main: lx.record({
+			key: "tid",
+			record: lx.object({
+				subject: lx.ref(strongRef, { required: true }),
+				createdAt: lx.string({ required: true, format: "datetime" }),
+			}),
+		}),
+	});
+	return schema["~infer"];
+}).types([1151, "instantiations"]);
+
+bench("infer with ref to a named def of a JSON lexicon", () => {
+	const feedDefs = {
+		lexicon: 1,
+		id: "app.bsky.feed.defs",
+		defs: {
+			main: {
+				type: "object",
+				required: ["ok"],
+				properties: { ok: { type: "boolean" } },
+			},
+			postView: {
+				type: "object",
+				required: ["uri", "cid"],
+				properties: {
+					uri: { type: "string", format: "at-uri" },
+					cid: { type: "string", format: "cid" },
+				},
+			},
+		},
+	} as const;
+
+	const schema = lx.lexicon("app.example.withPost", {
+		main: lx.record({
+			key: "tid",
+			record: lx.object({
+				post: lx.ref(feedDefs, { def: "postView", required: true }),
+				createdAt: lx.string({ required: true, format: "datetime" }),
+			}),
+		}),
+	});
+	return schema["~infer"];
+}).types([1145, "instantiations"]);
+
 bench("infer with required/nullable refs to objects", () => {
 	const schema = lx.lexicon("test.nestedFlags", {
 		profile: lx.object({

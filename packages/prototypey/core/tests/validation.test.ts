@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { lx } from "../lib.ts";
+import { fromJSON, lx } from "../lib.ts";
 
 describe("basic validation", () => {
 	const schema = lx.lexicon("test.simple", {
@@ -796,4 +796,112 @@ describe("deep nesting", () => {
 		});
 		expect(result.success).toBe(false);
 	});
+});
+
+describe("lx.ref with JSON lexicon inputs", () => {
+	const strongRefJSON = {
+		lexicon: 1,
+		id: "com.atproto.repo.strongRef",
+		defs: {
+			main: {
+				type: "object",
+				required: ["uri", "cid"],
+				properties: {
+					uri: { type: "string", format: "at-uri" },
+					cid: { type: "string", format: "cid" },
+				},
+			},
+		},
+	} as const;
+
+	it("stores the NSID string at runtime when given raw JSON", () => {
+		const result = lx.ref(strongRefJSON);
+		expect(result).toEqual({
+			type: "ref",
+			ref: "com.atproto.repo.strongRef",
+		});
+	});
+
+	it("stores the NSID string at runtime when given a fromJSON result", () => {
+		const result = lx.ref(fromJSON(strongRefJSON));
+		expect(result).toEqual({
+			type: "ref",
+			ref: "com.atproto.repo.strongRef",
+		});
+	});
+
+	it("preserves options alongside the resolved ref", () => {
+		const result = lx.ref(strongRefJSON, {
+			required: true,
+			description: "Who did it",
+		});
+		expect(result).toEqual({
+			type: "ref",
+			ref: "com.atproto.repo.strongRef",
+			required: true,
+			description: "Who did it",
+		});
+	});
+
+	it("fully qualifies the ref string when `def` selects a non-main def", () => {
+		const feedDefs = {
+			lexicon: 1,
+			id: "app.bsky.feed.defs",
+			defs: {
+				main: { type: "object", properties: {} },
+				postView: {
+					type: "object",
+					required: ["uri"],
+					properties: { uri: { type: "string" } },
+				},
+			},
+		} as const;
+
+		const result = lx.ref(feedDefs, { def: "postView", required: true });
+		expect(result).toEqual({
+			type: "ref",
+			ref: "app.bsky.feed.defs#postView",
+			required: true,
+		});
+		// `def` must not leak into the emitted object
+		expect("def" in result).toBe(false);
+	});
+
+	it("omits the fragment when `def` defaults to main", () => {
+		expect(lx.ref(strongRefJSON)).toEqual({
+			type: "ref",
+			ref: "com.atproto.repo.strongRef",
+		});
+		expect(lx.ref(strongRefJSON, { def: "main" })).toEqual({
+			type: "ref",
+			ref: "com.atproto.repo.strongRef",
+		});
+	});
+
+	it("ignores `def` when the ref is a string so the string is taken verbatim", () => {
+		expect(
+			lx.ref("app.bsky.feed.defs#existing", {
+				// `def` is nonsensical with a string input — the string wins.
+				def: "other",
+			} as unknown as { def: "other" }),
+		).toEqual({
+			type: "ref",
+			ref: "app.bsky.feed.defs#existing",
+		});
+	});
+
+	it("emits identical JSON regardless of how the ref is provided", () => {
+		const fromString = lx.lexicon("com.example.likeFromString", {
+			main: lx.object({ subject: lx.ref("com.atproto.repo.strongRef") }),
+		});
+		const fromRawJson = lx.lexicon("com.example.likeFromString", {
+			main: lx.object({ subject: lx.ref(strongRefJSON) }),
+		});
+		const fromWrapped = lx.lexicon("com.example.likeFromString", {
+			main: lx.object({ subject: lx.ref(fromJSON(strongRefJSON)) }),
+		});
+		expect(fromRawJson.json).toEqual(fromString.json);
+		expect(fromWrapped.json).toEqual(fromString.json);
+	});
+
 });

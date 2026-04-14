@@ -73,6 +73,44 @@ const lex = lx.lexicon("app.bsky.actor.profile", {
 
 you could also access the json definition with `lex.json()`.
 
+### Referencing Lexicons From Other Files
+
+`lx.ref()` accepts an NSID string, but it also accepts an imported lexicon JSON (from a sibling `lexicons/` directory, as per atproto convention) or another prototypey lexicon. When you pass an object, the `main` def is resolved at the type level:
+
+```ts
+import strongRef from "./lexicons/com/atproto/repo/strongRef.json" with { type: "json" };
+
+const like = lx.lexicon("app.bsky.feed.like", {
+  main: lx.record({
+    key: "tid",
+    record: lx.object({
+      subject: lx.ref(strongRef, { required: true }),
+      createdAt: lx.string({ required: true, format: "datetime" }),
+    }),
+  }),
+});
+
+type Like = (typeof like)["~infer"];
+// {
+//   $type: "app.bsky.feed.like"
+//   subject: { $type: "com.atproto.repo.strongRef"; uri: string; cid: string }
+//   createdAt: string
+// }
+```
+
+At runtime the ref is stored as the NSID string, so emitted JSON is identical to writing `lx.ref("com.atproto.repo.strongRef")` by hand — the imported JSON is only consumed by the type system.
+
+Pass a `def` option to target a non-`main` definition of a multi-def lexicon:
+
+```ts
+import feedDefs from "./lexicons/app/bsky/feed/defs.json" with { type: "json" };
+
+lx.object({
+  post: lx.ref(feedDefs, { def: "postView", required: true }),
+  // $type resolves to "app.bsky.feed.defs#postView" with postView's fields
+});
+```
+
 ### Permission Sets
 
 You can define [permission-set lexicons](https://atproto.com/specs/permission), crucial for implementing OAuth in your app, using `lx.permissionSet()` and the permission entry builders.

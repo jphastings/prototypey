@@ -1,6 +1,6 @@
 import { test, expect } from "vitest";
 import { attest } from "@ark/attest";
-import { lx } from "../lib.ts";
+import { fromJSON, lx } from "../lib.ts";
 
 test("InferNS produces expected type shape", () => {
 	const exampleLexicon = lx.lexicon("com.example.post", {
@@ -495,6 +495,173 @@ test("InferRef handles nullable reference", () => {
     | { [x: string]: unknown; $type: "com.example.node" }
     | undefined
 }`);
+});
+
+test("InferRef resolves main def from a raw JSON lexicon", () => {
+	const strongRef = {
+		lexicon: 1,
+		id: "com.atproto.repo.strongRef",
+		defs: {
+			main: {
+				type: "object",
+				required: ["uri", "cid"],
+				properties: {
+					uri: { type: "string", format: "at-uri" },
+					cid: { type: "string", format: "cid" },
+				},
+			},
+		},
+	} as const;
+
+	const lexicon = lx.lexicon("test.refFromJson", {
+		main: lx.object({
+			subject: lx.ref(strongRef),
+		}),
+	});
+
+	attest(lexicon["~infer"]).type.toString.snap(`{
+  $type: "test.refFromJson"
+  subject?:
+    | {
+        $type: "com.atproto.repo.strongRef"
+        cid: string
+        uri: string
+      }
+    | undefined
+}`);
+});
+
+test("InferRef resolves main def from a fromJSON result", () => {
+	const strongRef = fromJSON({
+		lexicon: 1,
+		id: "com.atproto.repo.strongRef",
+		defs: {
+			main: {
+				type: "object",
+				required: ["uri", "cid"],
+				properties: {
+					uri: { type: "string", format: "at-uri" },
+					cid: { type: "string", format: "cid" },
+				},
+			},
+		},
+	});
+
+	const lexicon = lx.lexicon("test.refFromJsonResult", {
+		main: lx.object({
+			subject: lx.ref(strongRef),
+		}),
+	});
+
+	attest(lexicon["~infer"]).type.toString.snap(`{
+  $type: "test.refFromJsonResult"
+  subject?:
+    | {
+        $type: "com.atproto.repo.strongRef"
+        cid: string
+        uri: string
+      }
+    | undefined
+}`);
+});
+
+test("InferRef picks a named def from a raw JSON lexicon", () => {
+	const feedDefs = {
+		lexicon: 1,
+		id: "app.bsky.feed.defs",
+		defs: {
+			main: {
+				type: "object",
+				required: ["ok"],
+				properties: { ok: { type: "boolean" } },
+			},
+			postView: {
+				type: "object",
+				required: ["uri", "cid"],
+				properties: {
+					uri: { type: "string", format: "at-uri" },
+					cid: { type: "string", format: "cid" },
+				},
+			},
+		},
+	} as const;
+
+	const lexicon = lx.lexicon("test.refWithDef", {
+		main: lx.object({
+			post: lx.ref(feedDefs, { def: "postView" }),
+		}),
+	});
+
+	attest(lexicon["~infer"]).type.toString.snap(`{
+  $type: "test.refWithDef"
+  post?:
+    | {
+        $type: "app.bsky.feed.defs#postView"
+        cid: string
+        uri: string
+      }
+    | undefined
+}`);
+});
+
+test("InferRef defaults to main when def is omitted", () => {
+	const feedDefs = {
+		lexicon: 1,
+		id: "app.bsky.feed.defs",
+		defs: {
+			main: {
+				type: "object",
+				required: ["ok"],
+				properties: { ok: { type: "boolean" } },
+			},
+			postView: {
+				type: "object",
+				required: ["uri"],
+				properties: { uri: { type: "string" } },
+			},
+		},
+	} as const;
+
+	const lexicon = lx.lexicon("test.refDefaultMain", {
+		main: lx.object({
+			summary: lx.ref(feedDefs),
+		}),
+	});
+
+	attest(lexicon["~infer"]).type.toString.snap(`{
+  $type: "test.refDefaultMain"
+  summary?:
+    | { $type: "app.bsky.feed.defs"; ok: boolean }
+    | undefined
+}`);
+});
+
+test("lx.ref stores a string nsid at runtime when given a JSON lexicon", () => {
+	const strongRef = {
+		lexicon: 1,
+		id: "com.atproto.repo.strongRef",
+		defs: {
+			main: {
+				type: "object",
+				required: ["uri", "cid"],
+				properties: {
+					uri: { type: "string", format: "at-uri" },
+					cid: { type: "string", format: "cid" },
+				},
+			},
+		},
+	} as const;
+
+	const lexicon = lx.lexicon("test.refFromJsonRuntime", {
+		main: lx.object({
+			subject: lx.ref(strongRef),
+		}),
+	});
+
+	expect(
+		(lexicon.json.defs.main as { properties: { subject: { ref: unknown } } })
+			.properties.subject.ref,
+	).toBe("com.atproto.repo.strongRef");
 });
 
 // ============================================================================

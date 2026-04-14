@@ -376,6 +376,28 @@ function resolveNsid(ref: NsidResolvable): string {
 }
 
 /**
+ * Shape of a lexicon JSON document. Used to accept raw JSON imports (e.g.
+ * `import x from "./x.json" with { type: "json" }`) alongside NSID strings
+ * and `fromJSON` results in {@link lx.ref}.
+ */
+type LexiconJSONShape = {
+	readonly id: string;
+	readonly defs: Record<string, unknown>;
+};
+
+/** Accepted inputs for {@link lx.ref}. */
+type RefInput =
+	| string
+	| LexiconJSONShape
+	| { readonly json: LexiconJSONShape };
+
+function resolveRefNsid(ref: RefInput): string {
+	if (typeof ref === "string") return ref;
+	if ("json" in ref) return ref.json.id;
+	return ref.id;
+}
+
+/**
  * A translatable string with optional language variants.
  * Used particularly permission-sets.
  */
@@ -656,17 +678,43 @@ export const lx = {
 	},
 	/**
 	 * Creates a reference to another schema definition.
+	 *
+	 * Accepts either an NSID string (e.g. `"com.atproto.repo.strongRef"` or a
+	 * local `"#user"`), a raw imported lexicon JSON (`{ id, defs }`), or a
+	 * {@link fromJSON} result (`{ json: { id, defs } }`). When a lexicon object
+	 * is passed, its `main` def is resolved at the type level so refs across
+	 * files get full type inference without codegen:
+	 *
+	 * ```ts
+	 * import strongRef from "./lexicons/com/atproto/repo/strongRef.json" with { type: "json" };
+	 * lx.ref(strongRef);
+	 * ```
+	 *
 	 * @see https://atproto.com/specs/lexicon#ref
 	 */
-	ref<Ref extends string>(
+	ref<const Ref extends RefInput, const Def extends string = "main">(
 		ref: Ref,
-		options?: LexiconItemCommonOptions,
-	): LexiconItemCommonOptions & { type: "ref"; ref: Ref } {
+		options?: LexiconItemCommonOptions & { def?: Def },
+	): LexiconItemCommonOptions & { type: "ref"; ref: Ref; def: Def } {
+		const { def, ...rest } = (options ?? {}) as LexiconItemCommonOptions & {
+			def?: string;
+		};
+		const defName = def ?? "main";
+		const baseNsid = resolveRefNsid(ref);
+		// String refs are taken verbatim — `def` only narrows object inputs.
+		const nsid =
+			typeof ref === "string" || defName === "main"
+				? baseNsid
+				: `${baseNsid}#${defName}`;
 		return {
 			type: "ref",
-			ref,
-			...options,
-		} as LexiconItemCommonOptions & { type: "ref"; ref: Ref };
+			ref: nsid,
+			...rest,
+		} as unknown as LexiconItemCommonOptions & {
+			type: "ref";
+			ref: Ref;
+			def: Def;
+		};
 	},
 	/**
 	 * Creates a union type for multiple possible type variants.
